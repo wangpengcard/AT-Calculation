@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>农作物积温与降雨分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f5f7f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .input-group { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+        .input-item { display: flex; flex-direction: column; }
+        label { font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
+        button { padding: 8px 20px; background: #24292f; color: white; border: none; border-radius: 4px; cursor: pointer; height: 35px; }
+        button:hover { background: #000; }
+        #chart-container { width: 100%; height: 650px; }
+        .hint { font-size: 11px; color: #888; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>数据查询配置 (4月1日 - 9月30日)</h2>
+    <div class="input-group">
+        <div class="input-item">
+            <label>粘贴坐标 (经度,纬度)</label>
+            <input type="text" id="raw_coords" value="126.01,47.35">
+            <div class="hint">严格格式: 经度,纬度</div>
+        </div>
+        <div class="input-item">
+            <label>年份 (多个用逗号隔开)</label>
+            <input type="text" id="years" value="2024,2025">
+            <div class="hint">例如: 2023,2024</div>
+        </div>
+        <div class="input-item">
+            <label>GitHub PAT</label>
+            <input type="password" id="pat" placeholder="输入你的 Token">
+            <div class="hint">具有 repo 权限的访问令牌</div>
+        </div>
+        <button onclick="triggerAction()">🚀 开始后台计算</button>
+        <button onclick="loadData()" style="background:#0577fa;">🔄 刷新并显示图表</button>
+    </div>
+</div>
+
+<div class="card">
+    <div id="chart-container"></div>
+</div>
+
+<script>
+    // 【重要配置】请修改为你的 GitHub 用户名和仓库名
+    const GITHUB_REPO = "wangpengcard/AT-Calculation"; 
+
+    // 1. 触发 GitHub Action (按照你的要求：经度在前，纬度在后)
+    async function triggerAction() {
+        const raw = document.getElementById('raw_coords').value;
+        const coords = raw.split(',');
+        
+        if(coords.length !== 2) return alert("请确保坐标格式为：经度,纬度");
+
+        const pat = document.getElementById('pat').value;
+        if(!pat) return alert("请输入 GitHub PAT 以触发计算！");
+
+        const lon = coords[0].trim(); // 第一个值：经度
+        const lat = coords[1].trim(); // 第二个值：纬度
+        const years = document.getElementById('years').value;
+
+        const url = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
+        
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${pat}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    event_type: 'trigger_calc',
+                    client_payload: { lat: lat, lon: lon, years: years }
+                })
+            });
+            
+            if(res.ok) {
+                alert("✅ 指令已发出！\n1. Python 后端正在调取 API 并计算...\n2. 请等待约 2 分钟 Action 运行完毕后，点击【刷新图表】。");
+            } else {
+                const err = await res.json();
+                alert("❌ 失败：" + (err.message || res.statusText));
+            }
+        } catch(e) {
+            alert("❌ 网络错误，请检查 Token 权限或网络。");
+        }
+    }
+
+    // 2. 加载生成的 data.json 并绘图
+    async function loadData() {
+        try {
+            const res = await fetch(`data.json?t=${new Date().getTime()}`);
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            renderChart(data);
+        } catch(e) {
+            alert("⚠️ 尚未找到数据文件或文件正在生成，请确认 Action 是否已成功运行。");
+        }
+    }
+
+    // 3. ECharts 渲染
+    function renderChart(allData) {
+        const chart = echarts.init(document.getElementById('chart-container'));
+        const years = Object.keys(allData);
+        const series = [];
+        const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
+
+        years.forEach((year, index) => {
+            const yearData = allData[year];
+            const color = colors[index % colors.length];
+
+            // 活动积温 (实线)
+            series.push({
+                name: `${year} 活动积温`,
+                type: 'line',
+                data: yearData.active_accum,
+                itemStyle: { color: color },
+                lineStyle: { width: 3 },
+                symbol: 'none',
+                smooth: true
+            });
+
+            // 有效积温 (虚线)
+            series.push({
+                name: `${year} 有效积温`,
+                type: 'line',
+                data: yearData.effective_accum,
+                itemStyle: { color: color },
+                lineStyle: { type: 'dashed', width: 2 },
+                symbol: 'none',
+                smooth: true
+            });
+
+            // 月降雨量 (柱状)
+            series.push({
+                name: `${year} 月降雨`,
+                type: 'bar',
+                xAxisIndex: 1, 
+                yAxisIndex: 1,
+                data: Object.values(yearData.monthly_rain),
+                itemStyle: { color: color, opacity: 0.4 }
+            });
+        });
+
+        const option = {
+            title: { text: '年度阶段积温与降雨量对比 (4.1-9.30)', left: 'center' },
+            tooltip: { trigger: 'axis' },
+            legend: { top: 'bottom' },
+            grid: { top: '10%', bottom: '15%', left: '5%', right: '5%' },
+            xAxis: [
+                { type: 'category', data: allData[years[0]].dates, gridIndex: 0 },
+                { type: 'category', data: ['4月','5月','6月','7月','8月','9月'], gridIndex: 0, position: 'bottom', offset: 35 }
+            ],
+            yAxis: [
+                { type: 'value', name: '累积积温 (°C·d)', position: 'left' },
+                { type: 'value', name: '月降雨量 (mm)', position: 'right', splitLine: {show: false} }
+            ],
+            series: series
+        };
+
+        chart.setOption(option, true);
+    }
+
+    window.onload = loadData;
+</script>
+</body>
+</html>
