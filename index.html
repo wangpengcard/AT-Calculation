@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>农作物积温与降雨分析</title>
+    <title>农作物积温与降雨分析 (多年对比版)</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f5f7f9; }
@@ -13,14 +13,15 @@
         input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
         button { padding: 8px 20px; background: #24292f; color: white; border: none; border-radius: 4px; cursor: pointer; height: 35px; }
         button:hover { background: #000; }
-        #chart-container { width: 100%; height: 650px; }
+        #chart-container { width: 100%; height: 700px; }
         .hint { font-size: 11px; color: #888; margin-top: 4px; }
+        .status-info { margin-top: 15px; padding: 15px; border-left: 4px solid #5470c6; background: #f0f5ff; font-size: 14px; line-height: 1.6; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>积温查询及计算 (4月1日 - 9月30日)</h2>
+    <h2>农业气象积温分析 (五日滑动平均法)</h2>
     <div class="input-group">
         <div class="input-item">
             <label>粘贴坐标 (经度,纬度)</label>
@@ -40,6 +41,7 @@
         <button onclick="triggerAction()">🚀 开始后台计算</button>
         <button onclick="loadData()" style="background:#0577fa;">🔄 刷新并显示图表</button>
     </div>
+    <div id="period-info" class="status-info" style="display:none;"></div>
 </div>
 
 <div class="card">
@@ -47,23 +49,20 @@
 </div>
 
 <script>
-    // 【重要配置】请修改为你的 GitHub 用户名和仓库名
+    // GitHub 仓库配置
     const GITHUB_REPO = "wangpengcard/AT-Calculation"; 
 
-    // 1. 触发 GitHub Action (按照你的要求：经度在前，纬度在后)
+    // 触发 Action
     async function triggerAction() {
         const raw = document.getElementById('raw_coords').value;
         const coords = raw.split(',');
-        
         if(coords.length !== 2) return alert("请确保坐标格式为：经度,纬度");
-
         const pat = document.getElementById('pat').value;
         if(!pat) return alert("请输入 GitHub PAT 以触发计算！");
 
-        const lon = coords[0].trim(); // 第一个值：经度
-        const lat = coords[1].trim(); // 第二个值：纬度
+        const lon = coords[0].trim();
+        const lat = coords[1].trim();
         const years = document.getElementById('years').value;
-
         const url = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
         
         try {
@@ -78,82 +77,117 @@
                     client_payload: { lat: lat, lon: lon, years: years }
                 })
             });
-            
-            if(res.ok) {
-                alert("✅ 指令已发出！\n1. Python 后端正在调取 API 并计算...\n2. 请等待约 2 分钟 Action 运行完毕后，点击【刷新图表】。");
-            } else {
-                const err = await res.json();
-                alert("❌ 失败：" + (err.message || res.statusText));
-            }
-        } catch(e) {
-            alert("❌ 网络错误，请检查 Token 权限或网络。");
-        }
+            if(res.ok) alert("✅ 指令已发出！后端正在计算，请等待约 2 分钟。");
+            else alert("❌ 失败：" + res.statusText);
+        } catch(e) { alert("❌ 网络错误"); }
     }
 
-    // 2. 加载生成的 data.json 并绘图
+    // 加载数据
     async function loadData() {
         try {
             const res = await fetch(`data.json?t=${new Date().getTime()}`);
             if (!res.ok) throw new Error();
             const data = await res.json();
             renderChart(data);
+            showPeriodText(data);
         } catch(e) {
-            alert("⚠️ 尚未找到数据文件或文件正在生成，请确认 Action 是否已成功运行。");
+            alert("⚠️ 尚未找到数据文件，请确认 Action 是否已运行完成。");
         }
     }
 
-    // 3. ECharts 渲染
+    // 在页面显示具体日期文本
+    function showPeriodText(allData) {
+        const infoDiv = document.getElementById('period-info');
+        infoDiv.style.display = 'block';
+        let html = "<strong>📅 稳定生长期判定结果：</strong><br>";
+        Object.keys(allData).forEach(y => {
+            const info = allData[y].info;
+            html += `🔹 <b>${y}年</b>：${info.start_date} 至 ${info.end_date} <br>`;
+        });
+        infoDiv.innerHTML = html;
+    }
+
+    // ECharts 渲染
     function renderChart(allData) {
         const chart = echarts.init(document.getElementById('chart-container'));
         const years = Object.keys(allData);
         const series = [];
+        // 定义不同年份的颜色
         const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
+
+        // 以第一个年份的日期作为横轴参考
+        const firstYear = years[0];
+        const dateAxis = allData[firstYear].dates;
+        // 动态生成月份标签（3月-11月）
+        const rainMonths = Object.keys(allData[firstYear].monthly_rain).map(m => m.split('-')[1] + '月');
 
         years.forEach((year, index) => {
             const yearData = allData[year];
             const color = colors[index % colors.length];
 
-            // 活动积温 (实线)
+            // 1. 活动积温线
             series.push({
-                name: `${year} 活动积温`,
+                name: `${year} 活动积温 (≥10℃)`,
                 type: 'line',
                 data: yearData.active_accum,
                 itemStyle: { color: color },
                 lineStyle: { width: 3 },
                 symbol: 'none',
-                smooth: true
+                smooth: true,
+                // 使用垂直虚线标注每年的起止日
+                markLine: {
+                    symbol: ['none', 'none'],
+                    label: { show: true, position: 'end', fontSize: 11, fontWeight: 'bold' },
+                    lineStyle: { type: 'dashed', color: color, width: 1, opacity: 0.6 },
+                    data: [
+                        { xAxis: yearData.info.start_date, label: { formatter: `${year}起` } },
+                        { xAxis: yearData.info.end_date, label: { formatter: `${year}止` } }
+                    ]
+                }
             });
 
-            // 有效积温 (虚线)
+            // 2. 有效积温线
             series.push({
-                name: `${year} 有效积温`,
+                name: `${year} 有效积温 (≥0℃)`,
                 type: 'line',
                 data: yearData.effective_accum,
                 itemStyle: { color: color },
-                lineStyle: { type: 'dashed', width: 2 },
+                lineStyle: { type: 'dotted', width: 2 },
                 symbol: 'none',
                 smooth: true
             });
 
-            // 月降雨量 (柱状)
+            // 3. 降雨量柱状图
             series.push({
                 name: `${year} 月降雨`,
                 type: 'bar',
                 xAxisIndex: 1, 
                 yAxisIndex: 1,
                 data: Object.values(yearData.monthly_rain),
-                itemStyle: { color: color, opacity: 0.4 }
+                itemStyle: { color: color, opacity: 0.3 }
             });
         });
 
         const option = {
-            title: { text: '年度阶段积温与降雨量对比 (4.1-9.30)', left: 'center' },
-            tooltip: { trigger: 'axis' },
-            legend: { top: 'bottom' },
-            grid: { top: '10%', bottom: '15%', left: '5%', right: '5%' },
+            title: { text: '多年积温与降雨对比分析', subtext: '基于五日滑动平均法确定计算区间', left: 'center' },
+            tooltip: { 
+                trigger: 'axis', 
+                axisPointer: { type: 'shadow' },
+                backgroundColor: 'rgba(255, 255, 255, 0.9)'
+            },
+            legend: { top: 'bottom', padding: [10, 0] },
+            grid: { top: '12%', bottom: '15%', left: '5%', right: '5%' },
             xAxis: [
-                { type: 'category', data: allData[years[0]].dates, gridIndex: 0 },
-                { type: 'category', data: ['4月','5月','6月','7月','8月','9月'], gridIndex: 0, position: 'bottom', offset: 35 }
+                { type: 'category', data: dateAxis, gridIndex: 0 },
+                { 
+                    type: 'category', 
+                    data: rainMonths, 
+                    gridIndex: 0, 
+                    position: 'bottom', 
+                    offset: 35,
+                    axisTick: { show: false },
+                    axisLine: { show: false }
+                }
             ],
             yAxis: [
                 { type: 'value', name: '累积积温 (°C·d)', position: 'left' },
@@ -163,10 +197,10 @@
         };
 
         chart.setOption(option, true);
+        window.onresize = chart.resize;
     }
 
     window.onload = loadData;
 </script>
 </body>
-
 </html>
