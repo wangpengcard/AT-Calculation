@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>农作物积温与降雨分析 (多年对比版)</title>
+    <title>农作物积温与降雨分析</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f5f7f9; }
@@ -21,7 +21,7 @@
 <body>
 
 <div class="card">
-    <h2>农业气象积温分析 (五日滑动平均法)</h2>
+    <h2>农业气象积温分析</h2>
     <div class="input-group">
         <div class="input-item">
             <label>粘贴坐标 (经度,纬度)</label>
@@ -58,7 +58,7 @@
         const coords = raw.split(',');
         if(coords.length !== 2) return alert("请确保坐标格式为：经度,纬度");
         const pat = document.getElementById('pat').value;
-        if(!pat) return alert("请输入 GitHub PAT 以触发计算！");
+        if(!pat) return alert("请输入 GitHub PAT");
 
         const lon = coords[0].trim();
         const lat = coords[1].trim();
@@ -148,7 +148,7 @@
 
             // 2. 有效积温线
             series.push({
-                name: `${year} 有效积温 (≥0℃)`,
+                name: `${year} 有效积温 (>0℃)`,
                 type: 'line',
                 data: yearData.effective_accum,
                 itemStyle: { color: color },
@@ -204,3 +204,4 @@
 </script>
 </body>
 </html>
+
