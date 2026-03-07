@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: '3.9'
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests pandas  # 确保安装了这两个库
       - name: Run calculation
         env:
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
