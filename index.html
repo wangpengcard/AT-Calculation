@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>农业气象积温与降雨对比分析</title>
+    <title>农业气象积温与降雨对比分析 (4-9月版)</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f5f7f9; }
@@ -13,7 +13,7 @@
         input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
         button { padding: 8px 20px; background: #24292f; color: white; border: none; border-radius: 4px; cursor: pointer; height: 35px; }
         button:hover { background: #000; }
-        #chart-container { width: 100%; height: 700px; }
+        #chart-container { width: 100%; height: 750px; }
         .hint { font-size: 11px; color: #888; margin-top: 4px; }
         .status-info { margin-top: 15px; padding: 15px; border-left: 4px solid #5470c6; background: #f0f5ff; font-size: 14px; line-height: 1.6; }
     </style>
@@ -21,7 +21,7 @@
 <body>
 
 <div class="card">
-    <h2>农业气象积温分析 (3月1日 - 10月31日)</h2>
+    <h2>农业气象生长季分析 (4月1日 - 9月30日)</h2>
     <div class="input-group">
         <div class="input-item">
             <label>粘贴坐标 (经度,纬度)</label>
@@ -41,7 +41,6 @@
         <button onclick="triggerAction()">🚀 开始后台计算</button>
         <button onclick="loadData()" style="background:#0577fa;">🔄 刷新并显示图表</button>
     </div>
-    <div id="period-info" class="status-info" style="display:none;"></div>
 </div>
 
 <div class="card">
@@ -49,21 +48,16 @@
 </div>
 
 <script>
-    // 【重要配置】请修改为你的 GitHub 用户名和仓库名
+    // 【配置】修改为你的 GitHub 用户名和仓库名
     const GITHUB_REPO = "wangpengcard/AT-Calculation"; 
 
-    // 1. 触发 GitHub Action
     async function triggerAction() {
         const raw = document.getElementById('raw_coords').value;
         const coords = raw.split(',');
-        if(coords.length !== 2) return alert("请确保坐标格式为：经度,纬度");
+        if(coords.length !== 2) return alert("坐标格式错误");
 
         const pat = document.getElementById('pat').value;
-        if(!pat) return alert("请输入 GitHub PAT 以触发计算！");
-
-        const lon = coords[0].trim();
-        const lat = coords[1].trim();
-        const years = document.getElementById('years').value;
+        if(!pat) return alert("请输入 Token");
 
         const url = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
         
@@ -76,21 +70,18 @@
                 },
                 body: JSON.stringify({
                     event_type: 'trigger_calc',
-                    client_payload: { lat: lat, lon: lon, years: years }
+                    client_payload: { 
+                        lat: coords[1].trim(), 
+                        lon: coords[0].trim(), 
+                        years: document.getElementById('years').value 
+                    }
                 })
             });
-            
-            if(res.ok) {
-                alert("✅ 指令已发出！\n1. 后端正在进行 5日滑动剪切计算...\n2. 请等待约 2 分钟后点击【刷新图表】。");
-            } else {
-                alert("❌ 失败：" + res.statusText);
-            }
-        } catch(e) {
-            alert("❌ 网络错误");
-        }
+            if(res.ok) alert("✅ 指令已发出，请等待约 2 分钟后刷新。");
+            else alert("❌ 失败：" + res.statusText);
+        } catch(e) { alert("❌ 网络错误"); }
     }
 
-    // 2. 加载生成的 data.json 并绘图
     async function loadData() {
         try {
             const res = await fetch(`data.json?t=${new Date().getTime()}`);
@@ -98,11 +89,10 @@
             const data = await res.json();
             renderChart(data);
         } catch(e) {
-            alert("⚠️ 尚未找到数据文件，请确认 Action 是否已成功运行。");
+            alert("⚠️ 尚未找到数据文件，请确认 Action 是否成功结束。");
         }
     }
 
-    // 3. ECharts 渲染
     function renderChart(allData) {
         const chart = echarts.init(document.getElementById('chart-container'));
         const years = Object.keys(allData);
@@ -111,79 +101,106 @@
         const series = [];
         const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
         
-        // 获取基准日期序列（取第一个年份的日期）
+        // 1. 获取第一个年份的日期序列作为主轴（4-9月）
         const dateAxis = allData[years[0]].dates;
-        
-        // 固定月份列表，用于对齐降雨量柱状图
-        const fixedMonths = ['03', '04', '05', '06', '07', '08', '09', '10'];
+        const monthAxis = ['4月', '5月', '6月', '7月', '8月', '9月'];
+        const monthKeys = ['04', '05', '06', '07', '08', '09'];
 
         years.forEach((year, index) => {
             const yearData = allData[year];
             const color = colors[index % colors.length];
 
-            // 活动积温 (实线)
+            // --- 累计积温点线图 (使用左侧 Y 轴) ---
             series.push({
-                name: `${year} 活动积温 (≥10℃)`,
+                name: `${year} 累计活动积温`,
                 type: 'line',
                 data: yearData.active_accum,
                 itemStyle: { color: color },
-                lineStyle: { width: 3 },
-                symbol: 'none',
-                smooth: true
+                symbolSize: 4,
+                smooth: true,
+                z: 10
             });
 
-            // 有效积温 (虚线)
             series.push({
-                name: `${year} 有效积温 (>0℃)`,
+                name: `${year} 累计有效积温`,
                 type: 'line',
                 data: yearData.effective_accum,
                 itemStyle: { color: color },
-                lineStyle: { type: 'dashed', width: 2 },
+                lineStyle: { type: 'dashed', width: 1.5 },
                 symbol: 'none',
-                smooth: true
+                smooth: true,
+                z: 10
             });
 
-            // 处理降雨量数据：按固定月份对齐，防止年份不完整导致错位
-            const rainData = fixedMonths.map(m => yearData.monthly_rain[`${year}-${m}`] || 0);
+            // --- 月度积温柱状图 (使用左侧 Y 轴，显示增量) ---
+            // 假设 Python 后端会在 yearData 下提供月度统计，若没有则需在此计算
+            const monthlyActive = monthKeys.map(m => yearData.monthly_active?.[`${year}-${m}`] || 0);
+            const monthlyEffective = monthKeys.map(m => yearData.monthly_effective?.[`${year}-${m}`] || 0);
 
             series.push({
-                name: `${year} 月降雨`,
+                name: `${year} 月度活动积温`,
                 type: 'bar',
-                xAxisIndex: 1, 
+                xAxisIndex: 1,
+                data: monthlyActive,
+                itemStyle: { color: color, opacity: 0.6 },
+                barGap: '10%',
+                z: 2
+            });
+
+            series.push({
+                name: `${year} 月度有效积温`,
+                type: 'bar',
+                xAxisIndex: 1,
+                data: monthlyEffective,
+                itemStyle: { 
+                    color: color, 
+                    opacity: 0.6,
+                    decal: { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 2], rotation: Math.PI / 4 }
+                },
+                z: 2
+            });
+
+            // --- 降雨量三角形图 (使用右侧 Y 轴) ---
+            const rainData = monthKeys.map(m => yearData.monthly_rain?.[`${year}-${m}`] || 0);
+            series.push({
+                name: `${year} 月降雨量`,
+                type: 'line',
                 yAxisIndex: 1,
+                xAxisIndex: 1,
                 data: rainData,
-                itemStyle: { color: color, opacity: 0.3 }
+                symbol: 'triangle',
+                symbolSize: 10,
+                lineStyle: { type: 'dashed', width: 1, color: color },
+                itemStyle: { color: color },
+                z: 15
             });
         });
 
         const option = {
-            title: { 
-                text: '年度阶段积温与降雨对比 (5日滑动剪切版)', 
-                subtext: '基于 3月1日-10月31日 观测窗口',
-                left: 'center' 
-            },
+            title: { text: '农业气象生长季对比 (4-9月)', left: 'center' },
             tooltip: { trigger: 'axis' },
-            legend: { top: 'bottom', padding: [10, 0] },
-            grid: { top: '12%', bottom: '15%', left: '5%', right: '5%' },
+            legend: { top: 'bottom', padding: [10, 0], type: 'scroll' },
+            grid: { top: '10%', bottom: '15%', left: '5%', right: '5%' },
             xAxis: [
                 { 
                     type: 'category', 
                     data: dateAxis, 
-                    gridIndex: 0 
+                    gridIndex: 0,
+                    axisLabel: { interval: 14 } // 每两周显示一次日期
                 },
                 { 
                     type: 'category', 
-                    data: ['3月','4月','5月','6月','7月','8月','9月','10月'], 
+                    data: monthAxis, 
                     gridIndex: 0, 
                     position: 'bottom', 
-                    offset: 35,
+                    offset: 30,
                     axisTick: { show: false },
                     axisLine: { show: false }
                 }
             ],
             yAxis: [
-                { type: 'value', name: '累积积温 (°C·d)', position: 'left' },
-                { type: 'value', name: '月降雨量 (mm)', position: 'right', splitLine: {show: false} }
+                { type: 'value', name: '积温 (°C·d)', position: 'left' },
+                { type: 'value', name: '降雨量 (mm)', position: 'right', splitLine: { show: false } }
             ],
             series: series
         };
