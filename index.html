@@ -15,7 +15,6 @@
         button:hover { background: #000; }
         #chart-container { width: 100%; height: 750px; }
         .hint { font-size: 11px; color: #888; margin-top: 4px; }
-        .status-info { margin-top: 15px; padding: 15px; border-left: 4px solid #5470c6; background: #f0f5ff; font-size: 14px; line-height: 1.6; }
     </style>
 </head>
 <body>
@@ -48,17 +47,14 @@
 </div>
 
 <script>
-    // 【配置】修改为你的 GitHub 用户名和仓库名
     const GITHUB_REPO = "wangpengcard/AT-Calculation"; 
 
     async function triggerAction() {
         const raw = document.getElementById('raw_coords').value;
         const coords = raw.split(',');
         if(coords.length !== 2) return alert("坐标格式错误");
-
         const pat = document.getElementById('pat').value;
         if(!pat) return alert("请输入 Token");
-
         const url = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
         
         try {
@@ -101,7 +97,6 @@
         const series = [];
         const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
         
-        // 1. 获取第一个年份的日期序列作为主轴（4-9月）
         const dateAxis = allData[years[0]].dates;
         const monthAxis = ['4月', '5月', '6月', '7月', '8月', '9月'];
         const monthKeys = ['04', '05', '06', '07', '08', '09'];
@@ -110,32 +105,31 @@
             const yearData = allData[year];
             const color = colors[index % colors.length];
 
-            // --- 累计积温线图 (使用左侧 Y 轴) ---
+            // 1. 累计活动积温 (实线)
             series.push({
                 name: `${year} 累计活动积温`,
                 type: 'line',
                 data: yearData.active_accum,
                 itemStyle: { color: color },
-                symbol: 'none', // 修改点显示
+                symbol: 'none',
                 smooth: true,
                 z: 10
             });
 
+            // 2. 累计有效积温 (虚线)
             series.push({
                 name: `${year} 累计有效积温`,
                 type: 'line',
                 data: yearData.effective_accum,
                 itemStyle: { color: color },
                 lineStyle: { type: 'dashed', width: 1.5 },
-                symbol: 'none', // 修改点显示
+                symbol: 'none',
                 smooth: true,
                 z: 10
             });
 
-            // --- 月度积温柱状图 (使用左侧 Y 轴，显示增量) ---
+            // 3. 月度活动积温 (实心柱状图)
             const monthlyActive = monthKeys.map(m => yearData.monthly_active?.[`${year}-${m}`] || 0);
-            const monthlyEffective = monthKeys.map(m => yearData.monthly_effective?.[`${year}-${m}`] || 0);
-
             series.push({
                 name: `${year} 月度活动积温`,
                 type: 'bar',
@@ -146,18 +140,22 @@
                 z: 2
             });
 
+            // 4. 月度有效积温 (底色透明/白色，斜线有色)
+            const monthlyEffective = monthKeys.map(m => yearData.monthly_effective?.[`${year}-${m}`] || 0);
             series.push({
                 name: `${year} 月度有效积温`,
                 type: 'bar',
                 xAxisIndex: 1,
                 data: monthlyEffective,
                 itemStyle: { 
-                    color: color, 
-                    opacity: 0.6,
+                    color: 'transparent', // 关键：使柱体底色透明
+                    borderColor: color,   // 给柱子加个边框以便识别轮廓
+                    borderWidth: 1,
                     decal: { 
                         symbol: 'rect', 
-                        dashArrayX: [1, 5], // 增加 X 方向间距以降低密度
-                        dashArrayY: [2, 5], // 增加 Y 方向间距
+                        color: color,     // 关键：斜杠的颜色与点线图一致
+                        dashArrayX: [1, 6], // 降低斜线密度
+                        dashArrayY: [2, 6], 
                         rotation: Math.PI / 4,
                         symbolSize: 1
                     }
@@ -165,7 +163,7 @@
                 z: 2
             });
 
-            // --- 降雨量三角形图 (使用右侧 Y 轴) ---
+            // 5. 降雨量 (三角形 + 细虚线)
             const rainData = monthKeys.map(m => yearData.monthly_rain?.[`${year}-${m}`] || 0);
             series.push({
                 name: `${year} 月降雨量`,
@@ -175,7 +173,7 @@
                 data: rainData,
                 symbol: 'triangle',
                 symbolSize: 10,
-                lineStyle: { type: 'dashed', width: 1, color: color },
+                lineStyle: { type: 'dashed', width: 0.8, color: color },
                 itemStyle: { color: color },
                 z: 15
             });
@@ -194,7 +192,7 @@
                     type: 'category', 
                     data: dateAxis, 
                     gridIndex: 0,
-                    axisLabel: { interval: 14 } // 每两周显示一次日期
+                    axisLabel: { interval: 14 }
                 },
                 { 
                     type: 'category', 
