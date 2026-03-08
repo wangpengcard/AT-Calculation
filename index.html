@@ -110,13 +110,13 @@
             const yearData = allData[year];
             const color = colors[index % colors.length];
 
-            // --- 累计积温点线图 (使用左侧 Y 轴) ---
+            // --- 累计积温线图 (使用左侧 Y 轴) ---
             series.push({
                 name: `${year} 累计活动积温`,
                 type: 'line',
                 data: yearData.active_accum,
                 itemStyle: { color: color },
-                symbolSize: 4,
+                symbol: 'none', // 修改点显示
                 smooth: true,
                 z: 10
             });
@@ -127,13 +127,12 @@
                 data: yearData.effective_accum,
                 itemStyle: { color: color },
                 lineStyle: { type: 'dashed', width: 1.5 },
-                symbol: 'none',
+                symbol: 'none', // 修改点显示
                 smooth: true,
                 z: 10
             });
 
             // --- 月度积温柱状图 (使用左侧 Y 轴，显示增量) ---
-            // 假设 Python 后端会在 yearData 下提供月度统计，若没有则需在此计算
             const monthlyActive = monthKeys.map(m => yearData.monthly_active?.[`${year}-${m}`] || 0);
             const monthlyEffective = monthKeys.map(m => yearData.monthly_effective?.[`${year}-${m}`] || 0);
 
@@ -155,7 +154,13 @@
                 itemStyle: { 
                     color: color, 
                     opacity: 0.6,
-                    decal: { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 2], rotation: Math.PI / 4 }
+                    decal: { 
+                        symbol: 'rect', 
+                        dashArrayX: [1, 5], // 增加 X 方向间距以降低密度
+                        dashArrayY: [2, 5], // 增加 Y 方向间距
+                        rotation: Math.PI / 4,
+                        symbolSize: 1
+                    }
                 },
                 z: 2
             });
@@ -178,7 +183,10 @@
 
         const option = {
             title: { text: '农业气象生长季对比 (4-9月)', left: 'center' },
-            tooltip: { trigger: 'axis' },
+            tooltip: { 
+                trigger: 'axis',
+                axisPointer: { type: 'cross' }
+            },
             legend: { top: 'bottom', padding: [10, 0], type: 'scroll' },
             grid: { top: '10%', bottom: '15%', left: '5%', right: '5%' },
             xAxis: [
