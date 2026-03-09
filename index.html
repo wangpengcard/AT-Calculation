@@ -128,7 +128,7 @@
                 z: 10
             });
 
-            // 3. 月度活动积温 (实心柱状图)
+            // 3. 月度活动积温 (实心柱状图) - 增加数值标注
             const monthlyActive = monthKeys.map(m => yearData.monthly_active?.[`${year}-${m}`] || 0);
             series.push({
                 name: `${year} 月度活动积温`,
@@ -136,11 +136,20 @@
                 xAxisIndex: 1,
                 data: monthlyActive,
                 itemStyle: { color: color, opacity: 0.6 },
-                barGap: '10%',
+                label: {
+                    show: true,
+                    position: 'top',
+                    rotate: 45,
+                    distance: 10,
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: 'bold'
+                },
+                barGap: '15%',
                 z: 2
             });
 
-            // 4. 月度有效积温 (底色透明/白色，斜线有色)
+            // 4. 月度有效积温 (斜线柱状图) - 增加数值标注
             const monthlyEffective = monthKeys.map(m => yearData.monthly_effective?.[`${year}-${m}`] || 0);
             series.push({
                 name: `${year} 月度有效积温`,
@@ -148,22 +157,33 @@
                 xAxisIndex: 1,
                 data: monthlyEffective,
                 itemStyle: { 
-                    color: 'transparent', // 关键：使柱体底色透明
-                    borderColor: color,   // 给柱子加个边框以便识别轮廓
+                    color: 'transparent',
+                    borderColor: color,
                     borderWidth: 1,
                     decal: { 
                         symbol: 'rect', 
-                        color: color,     // 关键：斜杠的颜色与点线图一致
-                        dashArrayX: [1, 0], // 降低斜线密度
+                        color: color,
+                        dashArrayX: [1, 0],
                         dashArrayY: [2, 6], 
                         rotation: Math.PI / 4,
                         symbolSize: 1
                     }
                 },
+                label: {
+                    show: true,
+                    position: 'top',
+                    rotate: 45,
+                    distance: 5,
+                    color: color,
+                    fontSize: 10,
+                    fontStyle: 'italic',
+                    // 稍微偏离中心，防止重叠严重
+                    offset: [15, 0] 
+                },
                 z: 2
             });
 
-            // 5. 降雨量 (三角形 + 细虚线)
+            // 5. 降雨量 (三角形 + 细虚线) - 增加数值标注 (带单位)
             const rainData = monthKeys.map(m => yearData.monthly_rain?.[`${year}-${m}`] || 0);
             series.push({
                 name: `${year} 月降雨量`,
@@ -175,6 +195,13 @@
                 symbolSize: 10,
                 lineStyle: { type: 'dashed', width: 0.8, color: color },
                 itemStyle: { color: color },
+                label: {
+                    show: true,
+                    position: 'top',
+                    formatter: '{c}mm',
+                    color: color,
+                    fontSize: 10
+                },
                 z: 15
             });
         });
@@ -186,7 +213,7 @@
                 axisPointer: { type: 'cross' }
             },
             legend: { top: 'bottom', padding: [10, 0], type: 'scroll' },
-            grid: { top: '10%', bottom: '15%', left: '5%', right: '5%' },
+            grid: { top: '12%', bottom: '15%', left: '5%', right: '5%' },
             xAxis: [
                 { 
                     type: 'category', 
@@ -199,7 +226,7 @@
                     data: monthAxis, 
                     gridIndex: 0, 
                     position: 'bottom', 
-                    offset: 30,
+                    offset: 45,
                     axisTick: { show: false },
                     axisLine: { show: false }
                 }
@@ -219,5 +246,3 @@
 </script>
 </body>
 </html>
-
-
